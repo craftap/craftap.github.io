@@ -1,4 +1,5 @@
 const content = document.querySelector('.content');
+const btn = document.querySelector('.talk');
 
 // Function to speak text
 function speak(text) {
@@ -39,32 +40,30 @@ recognition.onresult = async (event) => {
     await takeCommand(transcript);
 };
 
-// Restart recognition automatically if it stops
-recognition.onend = () => {
-    recognition.start();
-};
-
 // Start recognition immediately
 recognition.start();
 
-// Function to communicate with OpenAI's GPT
+// Function to get a response from OpenAI's API
 async function openAIResponse(prompt) {
+    const apiKey = "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";
+
     try {
         const response = await fetch("https://api.openai.com/v1/completions", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer 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`
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
             },
             body: JSON.stringify({
                 model: "text-davinci-003",
                 prompt: prompt,
                 max_tokens: 100,
-                temperature: 0.7
+                temperature: 0.7,
             })
         });
         const data = await response.json();
-        return data.choices[0].text.trim();
+        const message = data.choices[0].text.trim();
+        return message;
     } catch (error) {
         console.error("Error:", error);
         speak("Sorry, I'm having trouble connecting to my intelligence.");
@@ -85,20 +84,19 @@ async function takeCommand(message) {
     } else if (message.includes('date')) {
         const date = new Date().toLocaleDateString([], { month: 'long', day: 'numeric' });
         speak("Today's date is " + date);
-    } else if (message.includes('remember that')) {
-        const note = message.split("remember that")[1].trim();
-        localStorage.setItem('note', note);
-        speak("Got it! I'll remember that.");
-    } else if (message.includes('what do you remember')) {
-        const note = localStorage.getItem('note');
-        if (note) {
-            speak("You asked me to remember that " + note);
-        } else {
-            speak("I don't have any notes.");
-        }
     } else {
-        // Send prompt to OpenAI for a response
-        const response = await openAIResponse(message);
-        speak(response);
+        // Send the command to OpenAI for a response
+        const aiResponse = await openAIResponse(message);
+        if (aiResponse) {
+            speak(aiResponse);
+        } else {
+            speak("I'm sorry, I couldn't understand the request.");
+        }
     }
 }
+
+// Button to manually activate listening
+btn.addEventListener('click', () => {
+    content.textContent = "Listening....";
+    recognition.start();
+});
