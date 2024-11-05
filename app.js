@@ -1,96 +1,104 @@
-// Selecting elements
-const btn = document.querySelector('.talk');
 const content = document.querySelector('.content');
 
-// Helper functions for text-to-speech
+// Function to speak text
 function speak(text) {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.volume = 1;
-    utterance.pitch = 1;
-    window.speechSynthesis.speak(utterance);
+    const textSpeak = new SpeechSynthesisUtterance(text);
+    textSpeak.rate = 1;
+    textSpeak.volume = 1;
+    textSpeak.pitch = 1;
+    window.speechSynthesis.speak(textSpeak);
 }
 
-function wishUser() {
+// Initial greeting based on time of day
+function wishMe() {
     const hour = new Date().getHours();
-    const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
-    speak(`${greeting}, Boss! How may I assist you today?`);
-}
-
-// Speech recognition setup
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = new SpeechRecognition();
-
-recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript.toLowerCase();
-    content.textContent = transcript;
-    processCommand(transcript);
-}
-
-// Event listener for button
-btn.addEventListener('click', () => {
-    content.textContent = "Listening...";
-    recognition.start();
-});
-
-// Command processing
-function processCommand(command) {
-    const greetings = ["hey", "hello"];
-    if (greetings.some(greet => command.includes(greet))) {
-        speak("Hello Sir, How may I assist you?");
-    } else if (command.includes("open google")) {
-        window.open("https://google.com", "_blank");
-        speak("Opening Google...");
-    } else if (command.includes("what time")) {
-        speak(`The current time is ${new Date().toLocaleTimeString()}`);
-    } else if (command.includes("remember that")) {
-        const info = command.split("remember that")[1].trim();
-        remember("note", info);
-        speak("Got it! I'll remember that.");
-    } else if (command.includes("what do you remember")) {
-        const note = recall("note");
-        if (note) speak(`You asked me to remember that: ${note}`);
-        else speak("I don't have any notes saved.");
-    } else if (command.includes("weather")) {
-        fetchWeather("CityName");
-    } else if (command.includes("learn this")) {
-        const [key, response] = command.split("learn this").map(s => s.trim());
-        remember(key, response);
-        speak("I’ve learned something new.");
+    if (hour < 12) {
+        speak("Good Morning, Boss.");
+    } else if (hour < 17) {
+        speak("Good Afternoon, Master.");
     } else {
-        const response = recall(command);
-        if (response) {
-            speak(response);
-        } else {
-            speak(`I found some information for ${command} on Google.`);
-            window.open(`https://www.google.com/search?q=${command.replace(" ", "+")}`, "_blank");
-        }
+        speak("Good Evening, Sir.");
     }
 }
 
-// LocalStorage management for memory
-function remember(topic, info) {
-    localStorage.setItem(topic, info);
-}
-
-function recall(topic) {
-    return localStorage.getItem(topic);
-}
-
-// Weather fetch function using OpenWeather API
-function fetchWeather(city) {
-    const apiKey = 'YOUR_API_KEY';
-    fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}`)
-        .then(response => response.json())
-        .then(data => {
-            const temp = Math.round(data.main.temp - 273.15);
-            speak(`The temperature in ${city} is ${temp} degrees Celsius.`);
-        })
-        .catch(error => speak("I couldn't retrieve the weather data."));
-}
-
-// Initialize on load
 window.addEventListener('load', () => {
     speak("Initializing JARVIS...");
-    wishUser();
+    wishMe();
 });
+
+// Set up continuous speech recognition
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new SpeechRecognition();
+recognition.continuous = true;
+recognition.interimResults = false;
+
+// Handle speech recognition results
+recognition.onresult = async (event) => {
+    const transcript = event.results[event.resultIndex][0].transcript.toLowerCase();
+    content.textContent = transcript;
+    await takeCommand(transcript);
+};
+
+// Restart recognition automatically if it stops
+recognition.onend = () => {
+    recognition.start();
+};
+
+// Start recognition immediately
+recognition.start();
+
+// Function to communicate with OpenAI's GPT
+async function openAIResponse(prompt) {
+    try {
+        const response = await fetch("https://api.openai.com/v1/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer YOUR_OPENAI_API_KEY`
+            },
+            body: JSON.stringify({
+                model: "text-davinci-003",
+                prompt: prompt,
+                max_tokens: 100,
+                temperature: 0.7
+            })
+        });
+        const data = await response.json();
+        return data.choices[0].text.trim();
+    } catch (error) {
+        console.error("Error:", error);
+        speak("Sorry, I'm having trouble connecting to my intelligence.");
+    }
+}
+
+// Process commands and respond accordingly
+async function takeCommand(message) {
+    if (message.includes('open google')) {
+        window.open("https://google.com", "_blank");
+        speak("Opening Google.");
+    } else if (message.includes('open youtube')) {
+        window.open("https://youtube.com", "_blank");
+        speak("Opening YouTube.");
+    } else if (message.includes('time')) {
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        speak("The current time is " + time);
+    } else if (message.includes('date')) {
+        const date = new Date().toLocaleDateString([], { month: 'long', day: 'numeric' });
+        speak("Today's date is " + date);
+    } else if (message.includes('remember that')) {
+        const note = message.split("remember that")[1].trim();
+        localStorage.setItem('note', note);
+        speak("Got it! I'll remember that.");
+    } else if (message.includes('what do you remember')) {
+        const note = localStorage.getItem('note');
+        if (note) {
+            speak("You asked me to remember that " + note);
+        } else {
+            speak("I don't have any notes.");
+        }
+    } else {
+        // Send prompt to OpenAI for a response
+        const response = await openAIResponse(message);
+        speak(response);
+    }
+}
