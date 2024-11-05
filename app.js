@@ -54,7 +54,7 @@ async function openAIResponse(prompt) {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer YOUR_OPENAI_API_KEY`
+                "Authorization": `Bearer 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`
             },
             body: JSON.stringify({
                 model: "text-davinci-003",
